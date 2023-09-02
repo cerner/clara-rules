@@ -1348,6 +1348,27 @@
 
     (is (= 42 @rule-output-env))))
 
+(deftest test-destructured-join-node-env-binding
+  (let [rule-output-env (atom #{})
+        rule {:name "clara.test-destructured-binding/test-destructured-test-env-binding"
+              :env {:rule-output rule-output-env} ; Rule environment so we can check its output.
+              :lhs '[{:args [[e a v]]
+                      :type :foo
+                      :constraints [(= e ?entity) (= v ?foo-value) (swap! rule-output conj ?foo-value)]}
+                     {:accumulator (clara.rules.accumulators/all),
+                      :from
+                      {:args [[e a v]]
+                       :type :bar
+                       :constraints [(= e ?entity) (= v ?bar-value) (swap! rule-output conj ?bar-value)]},
+                      :result-binding :?resp}]
+              :rhs '(inc 1)}]
+    (-> (mk-session [rule] :fact-type-fn second)
+        (insert [1 :foo 42])
+        (insert [1 :bar 43])
+        (fire-rules))
+
+    (is (= #{42 43} @rule-output-env))))
+
 (def locals-shadowing-tester
   "Used to demonstrate local shadowing works in `test-explicit-rhs-map-can-use-ns-name-for-unqualified-symbols` below."
   :bad)
