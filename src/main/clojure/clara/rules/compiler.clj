@@ -1627,6 +1627,7 @@
             ;; Create an accumulator structure for use when examining the node or the tokens
             ;; it produces.
             {:accumulator (:accumulator beta-node)
+             :env (:env beta-node)
              ;; Include the original filter expressions in the constraints for inspection tooling.
              :from (update-in condition [:constraints]
                               into (-> beta-node :join-filter-expressions :constraints))}

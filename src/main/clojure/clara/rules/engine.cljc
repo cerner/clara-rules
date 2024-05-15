@@ -670,7 +670,7 @@
 
 (defn- join-node-matches
   [node join-filter-fn token fact fact-bindings env]
-  (let [beta-bindings (try (join-filter-fn token fact fact-bindings {})
+  (let [beta-bindings (try (join-filter-fn token fact fact-bindings env)
                            (catch #?(:clj Exception :cljs :default) e
                                (throw-condition-exception {:cause e
                                                            :node node
@@ -695,7 +695,7 @@
                           token tokens
                           :let [fact (:fact element)
                                 fact-binding (:bindings element)
-                                beta-bindings (join-node-matches node join-filter-fn token fact fact-binding {})]
+                                beta-bindings (join-node-matches node join-filter-fn token fact fact-binding (:env condition))]
                           :when beta-bindings]
                          (->Token (conj (:matches token) [fact id])
                                   (conj fact-binding (:bindings token) beta-bindings)))))
@@ -711,7 +711,7 @@
                           element (mem/get-elements memory node join-bindings)
                           :let [fact (:fact element)
                                 fact-bindings (:bindings element)
-                                beta-bindings (join-node-matches node join-filter-fn token fact fact-bindings {})]
+                                beta-bindings (join-node-matches node join-filter-fn token fact fact-bindings (:env condition))]
                           :when beta-bindings]
                          (->Token (conj (:matches token) [fact id])
                                   (conj fact-bindings (:bindings token) beta-bindings)))))
@@ -731,7 +731,7 @@
      children
      (platform/eager-for [token (mem/get-tokens memory node join-bindings)
                           {:keys [fact bindings] :as element} elements
-                          :let [beta-bindings (join-node-matches node join-filter-fn token fact bindings {})]
+                          :let [beta-bindings (join-node-matches node join-filter-fn token fact bindings (:env condition))]
                           :when beta-bindings]
                          (->Token (conj (:matches token) [fact id])
                                   (conj (:bindings token) bindings beta-bindings)))))
@@ -745,7 +745,7 @@
      children
      (platform/eager-for [{:keys [fact bindings] :as element} (mem/remove-elements! memory node join-bindings elements)
                           token (mem/get-tokens memory node join-bindings)
-                          :let [beta-bindings (join-node-matches node join-filter-fn token fact bindings {})]
+                          :let [beta-bindings (join-node-matches node join-filter-fn token fact bindings (:env condition))]
                           :when beta-bindings]
                          (->Token (conj (:matches token) [fact id])
                                   (conj (:bindings token) bindings beta-bindings)))))
@@ -1378,8 +1378,8 @@
 
 (defn- filter-accum-facts
   "Run a filter on elements against a given token for constraints that are not simple hash joins."
-  [node join-filter-fn token candidate-facts bindings]
-  (filter #(join-node-matches node join-filter-fn token % bindings {}) candidate-facts))
+  [node join-filter-fn token candidate-facts bindings condition]
+  (filter #(join-node-matches node join-filter-fn token % bindings (:env condition)) candidate-facts))
 
 ;; A specialization of the AccumulateNode that supports additional tests
 ;; that have to occur on the beta side of the network. The key difference between this and the simple
@@ -1406,7 +1406,8 @@
                 [fact-bindings candidate-facts] grouped-candidate-facts
 
                 ;; Filter to items that match the incoming token, then apply the accumulator.
-                :let [filtered-facts (filter-accum-facts node join-filter-fn token candidate-facts fact-bindings)]
+                :let [filtered-facts (filter-accum-facts node join-filter-fn token candidate-facts
+                                                         fact-bindings accum-condition)]
 
                 :when (or (seq filtered-facts)
                           ;; Even if there no filtered facts, if there are no new bindings we may
@@ -1463,7 +1464,8 @@
         (doseq [token tokens
                 [fact-bindings candidate-facts] grouped-candidate-facts
 
-                :let [filtered-facts (filter-accum-facts node join-filter-fn token candidate-facts fact-bindings)]
+                :let [filtered-facts (filter-accum-facts node join-filter-fn token candidate-facts
+                                                         fact-bindings accum-condition)]
 
                 :when (or (seq filtered-facts)
                           ;; Even if there no filtered facts, if there are no new bindings an initial value
@@ -1531,13 +1533,15 @@
 
       (doseq [token matched-tokens
 
-              :let [new-filtered-facts (filter-accum-facts node join-filter-fn token candidates bindings)]
+              :let [new-filtered-facts (filter-accum-facts node join-filter-fn token candidates
+                                                           bindings accum-condition)]
 
               ;; If no new elements matched the token, we don't need to do anything for this token
               ;; since the final result is guaranteed to be the same.
               :when (seq new-filtered-facts)
 
-              :let [previous-filtered-facts (filter-accum-facts node join-filter-fn token previous-candidates bindings)
+              :let [previous-filtered-facts (filter-accum-facts node join-filter-fn token previous-candidates
+                                                                bindings accum-condition)
 
                     previous-accum-result-init (cond
                                                  (seq previous-filtered-facts)
@@ -1633,9 +1637,11 @@
       (doseq [;; Get all of the previously matched tokens so we can retract and re-send them.
               token matched-tokens
 
-              :let [previous-facts (filter-accum-facts node join-filter-fn token previous-candidates bindings)
+              :let [previous-facts (filter-accum-facts node join-filter-fn token previous-candidates
+                                                       bindings accum-condition)
 
-                    new-facts (filter-accum-facts node join-filter-fn token new-candidates bindings)]
+                    new-facts (filter-accum-facts node join-filter-fn token new-candidates
+                                                  bindings accum-condition)]
 
               ;; The previous matching elements are a superset of the matching elements after retraction.
               ;; Therefore, if the counts before and after are equal nothing retracted actually matched
