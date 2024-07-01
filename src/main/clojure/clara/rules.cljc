@@ -311,14 +311,17 @@
   (defmacro mk-session
      "Creates a new session using the given rule sources. The resulting session
       is immutable, and can be used with insert, retract, fire-rules, and query functions.
-
-      If no sources are provided, it will attempt to load rules from the caller's namespace,
-      which is determined by reading Clojure's *ns* var.
+      
+      `sources-and-args` can start with 0+ sources, each being either a namespace symbol or
+      a sequence of rules. If no sources are provided, it will attempt to load rules from the 
+      caller's namespace, which is determined by reading Clojure's *ns* var.
+    
+      Examples: `(mk-session)`, `(mk-session 'my.ns)`, `(mk-session [my-rule])`, `(mk-session 'ns1 [rule2] :cache false)`
 
       This will use rules defined with defrule, queries defined with defquery, and sequences
       of rule and/or query structures in vars that are annotated with the metadata ^:production-seq.
 
-      The caller may also specify keyword-style options at the end of the parameters. Currently five
+      The caller may also specify keyword-style options at the end of `sources-and-args`. Currently five
       options are supported, although most users will either not need these or just the first two:
 
       * :fact-type-fn, which must have a value of a function used to determine the logical type of a given
@@ -344,10 +347,10 @@
 
       This is not supported in ClojureScript, since it requires eval to dynamically build a session. ClojureScript
       users must use pre-defined rule sessions using defsession."
-     [& args]
-     (if (and (seq args) (not (keyword? (first args))))
-       `(com/mk-session ~(vec args)) ; At least one namespace given, so use it.
-       `(com/mk-session (concat [(ns-name *ns*)] ~(vec args)))))) ; No namespace given, so use the current one.
+     [& sources-and-args]
+     (if (and (seq sources-and-args) (not (keyword? (first sources-and-args))))
+       `(com/mk-session ~(vec sources-and-args)) ; At least one namespace given, so use it.
+       `(com/mk-session (concat [(ns-name *ns*)] ~(vec sources-and-args)))))) ; No namespace given, so use the current one.
 
 #?(:clj
   (defmacro defsession
